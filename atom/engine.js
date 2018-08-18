@@ -13,9 +13,11 @@ var modelv = []; //verts
 var modeli = []; //indices
 var modeln = []; //norms
 var modelc = []; //colors
+var modelm = []; //centers [middles]
 var imgc = []; //images
 var scened = []; //scenes
 var cam = {x:0,y:0,z:0,a:0,b:0,c:0};
+var curScene = 0;
 
 var canvas2d;
 var canvas2dctx;
@@ -33,7 +35,7 @@ var textStart = 64;
 //#region models + textures
 function voxelize() {
     //use voxelbox to generate strings, then copy them into data.js
-    for (var idx = 25; idx < 33; idx++) {
+    for (var idx = 25; idx < 47; idx++) {
         //var d = data[idx].split("").map(Number); good for 10x10x10 but not bigger
         var d = data[idx].split("").map(n => parseInt(n,36));
         var verts = [];
@@ -44,37 +46,39 @@ function voxelize() {
         var mats = [];
         var i,j,c = 0;
         var ver;
-        for (i = 1; i < d[0]*3+1; i += 3) {
+        for (i = 4; i < d[3]*3+4; i += 3) {
             mats.push([d[i],d[i+1],d[i+2]]);
         }
         var placeSingle = d.indexOf(35);
         if (placeSingle == -1)
             placeSingle = d.length; //reusing d.length, for some reason 99999 compresses bad
-        for (i = d[0]*3+1; i < d.length; i += (i < placeSingle) ? 7 : 4) {
+
+        for (i = d[3]*3+4; i < d.length; i += (i < placeSingle) ? 7 : 4) {
             var x1,y1,z1,x2,y2,z2,mat;
             if (i == placeSingle)
                 i++;
-            x1 = d[i];
-            y1 = d[i+2];
-            z1 = d[i+1];
+            var off = (idx>31&&idx<35||idx==41)?-0.5:0; //hack for rotating objects with odd width/height
+            x1 = d[i]-~~(d[0]/2)+off;
+            y1 = d[i+2]-~~(d[2]/2)+off;
+            z1 = d[i+1]-~~(d[1]/2)+off;
             if (i >= placeSingle) {
                 x2 = x1;
                 y2 = y1;
                 z2 = z1;
                 mat = mats[d[i+3]];
             } else {
-                x2 = d[i+3];
-                y2 = d[i+5];
-                z2 = d[i+4];
+                x2 = d[i+3]-~~(d[0]/2)+off;
+                y2 = d[i+5]-~~(d[2]/2)+off;
+                z2 = d[i+4]-~~(d[1]/2)+off;
                 mat = mats[d[i+6]];
             }
             ver = createCubeOfDims(
-                0.0+x1/-10+0.8,
-                0.0+y1/ 10-0.0,
-                0.0+z1/ 10-0.0,
-               -0.1+x2/-10+0.8,
-                0.1+y2/ 10-0.0,
-                0.1+z2/ 10-0.0
+                0.0+x1/-10,
+                0.0+y1/ 10,
+                0.0+z1/ 10,
+               -0.1+x2/-10,
+                0.1+y2/ 10,
+                0.1+z2/ 10
             );
             for (j = 0; j < 72; j++) {
                 verts[j+(c*72)] = ver[j];
@@ -98,6 +102,7 @@ function voxelize() {
         modeli.push(indcs);
         modeln.push(norms);
         modelc.push(colrs);
+        modelm.push([d[0]/2,d[1]/2,d[2]/2]);
     }
 }
 
@@ -169,7 +174,7 @@ function drawsvg() {
 }
 
 function buildscene() {
-    for (var idx = 0; idx < 1; idx++) {
+    for (var idx = 0; idx < 2; idx++) {
         var l = parseInt(data[idx].slice(0, 2));
         var d = data[idx].substr(2, l*9).match(/[\d][\d][\d]/g).map(n => parseInt(n));
         var m = data[idx].slice(2 + l*9).match(/[\d][\d]/g).map(n => parseInt(n));
@@ -307,8 +312,8 @@ function setupLock() {
     document.addEventListener("pointerlockchange", lockChangeAlert, false);
     document.addEventListener("mozpointerlockchange", lockChangeAlert, false);
 
-    document.onkeydown = handleKeyDown;
-    document.onkeyup = handleKeyUp;
+    //document.onkeydown = handleKeyDown;
+    //document.onkeyup = handleKeyUp;
 }
 
 function lockChangeAlert() {
@@ -334,7 +339,7 @@ function setMousePos(e) {
     yMouse = e.clientY - rect.top;
 }
 
-var keysDown = {};
+/*var keysDown = {};
 function handleKeyDown(event) {
     keysDown[event.keyCode] = true;
 }
@@ -361,12 +366,13 @@ function handleKeys() {
     } else if (keysDown[16] || keysDown[67]) {
         cam.y -= 0.05;
     }
-}
+}*/
 
 function move(len, deg) {
     cam.x += len * Math.cos(((-cam.b*180/Math.PI+deg)%360)*Math.PI/180);
     cam.z += len * Math.sin(((-cam.b*180/Math.PI+deg)%360)*Math.PI/180);
 }
+var u=l=d=r=0;onkeydown=onkeyup=e=>top['lld,rlurdu'[e.which%32%17]]=e.type[5];
 //#endregion
 //#region loop
 function render() {
@@ -381,8 +387,6 @@ function render() {
 
     curLoop();
 
-    handleKeys();
-
     scene.forEach(function(obj) {
         renderObj(obj);
     });
@@ -393,9 +397,10 @@ function render() {
 }
 //#endregion
 //#region render and scene
+var proj, vm;
 function renderObj(obj) {
-    var proj = new Float32Array(persp(gl.canvas.clientWidth / gl.canvas.clientHeight, 0.1, 100));
-    var vm = new Float32Array(lookAtFps([cam.x-obj.tfm.x,cam.y-obj.tfm.y,cam.z-obj.tfm.z],cam.a,cam.b));
+    proj = new Float32Array(persp(gl.canvas.clientWidth / gl.canvas.clientHeight, 0.1, 150));
+    vm = new Float32Array(lookAtFps([cam.x-obj.tfm.x,cam.y-obj.tfm.y,cam.z-obj.tfm.z],cam.a,cam.b,obj.tfm.c));
     enableBuffer(resourceMeta.aVertexPosition, obj.pos, 3);
     enableBuffer(resourceMeta.aVertexNormal, obj.nrm, 3);
     enableBuffer(resourceMeta.aVertexColor, obj.col, 4);
@@ -439,8 +444,11 @@ function addSceneObj(transform,modelIndex/*,shader*/) {
         vct: modelv[modelIndex].length,
         idx: indexBuffer,
         nrm: normalBuffer,
-        col: colorBuffer
+        col: colorBuffer,
+        mdl: modelIndex
     });
+
+    return scene[scene.length-1];
 }
 function removeSceneObj(obj) {
     var idx = scene.indexOf(obj);
@@ -449,12 +457,18 @@ function removeSceneObj(obj) {
     }
 }
 function loadScene(sceneIdx) {
+    scene = [];
+    if (sceneIdx == -1) return;
     for (var s in scened[sceneIdx]) {
         s = scened[sceneIdx][s];
         //console.log ("adding obj at " + s.x + " " + s.y + " " + s.z + " - " + s.m);
         addSceneObj(tfm((s.x-500)/-10, (s.z-500)/10, (s.y-500)/10), s.m);
     }
+    curScene = sceneIdx;
 }
+//#endregion
+//#region terrain
+
 //#endregion
 //#region utils
 //shaders
@@ -479,7 +493,7 @@ function transform(posX, posY, posZ, rotX, rotY, rotZ) {
 }
 //https://www.3dgep.com/understanding-the-view-matrix/
 //"The function to implement this camera model might look like this:"
-function lookAtFps(eye, pitch, yaw) {
+function lookAtFps(eye, pitch, yaw, rot) {
     var cosPitch = Math.cos(((pitch+90)%180)-90);
     var sinPitch = Math.sin(((pitch+90)%180)-90);
     var cosYaw = Math.cos(yaw%360);
@@ -489,12 +503,35 @@ function lookAtFps(eye, pitch, yaw) {
     var yaxis = [sinYaw * sinPitch, cosPitch, cosYaw * sinPitch];
     var zaxis = [sinYaw * cosPitch, -sinPitch, cosPitch * cosYaw];
 
+    var a=xaxis[0];
+    var b=yaxis[0];
+    var c=zaxis[0];
+    var g=xaxis[2];
+    var h=yaxis[2];
+    var i=zaxis[2];
+    var m=Math.cos(rot);
+    var o=Math.sin(rot);
+
     return [
-        xaxis[0],yaxis[0],zaxis[0],0,
+        a*m+g*o,b*m+h*o,c*m+i*o,0,
         xaxis[1],yaxis[1],zaxis[1],0,
-        xaxis[2],yaxis[2],zaxis[2],0,
+        a*-o+g*m,b*-o+h*m,c*-o+i*m,0,
         -dot3(xaxis,eye),-dot3(yaxis,eye),-dot3(zaxis,eye),1
     ];
+
+    //return [
+    //    xaxis[0],yaxis[0],zaxis[0],0,
+    //    d*m+g*-o,h*-o+m*e,f*m+i*-o,0,
+    //    d*o+g*m,h*m+o*e,f*o+i*m,0,
+    //    -dot3(xaxis,eye),-dot3(yaxis,eye),-dot3(zaxis,eye),1
+    //];
+
+    //return [
+    //    xaxis[0],yaxis[0],zaxis[0],0,
+    //    xaxis[1],yaxis[1],zaxis[1],0,
+    //    xaxis[2],yaxis[2],zaxis[2],0,
+    //    -dot3(xaxis,eye),-dot3(yaxis,eye),-dot3(zaxis,eye),1
+    //];
 }
 function dot3(u, v) {
     return u[0]*v[0]+u[1]*v[1]+u[2]*v[2];
@@ -524,13 +561,11 @@ function persp(aspect, near, far) {
     ];
 }
 //bridges
-function tfm(posX, posY, posZ, rotX = 0, rotY = 0, rotZ = 0) {
+function tfm(posX, posY, posZ, rotZ = 0) {
     return {
         x: posX,
         y: posY,
         z: posZ,
-        a: rotX,
-        b: rotY,
         c: rotZ
     }
 }
@@ -545,6 +580,15 @@ function setDialogueFontSize() {
 
 function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
+}
+
+var seed;
+function seededRand() { //0-1
+    return seed = (Math.sin(1/(seed/111222))/2);
+}
+
+function randRange(min, max) {
+    return (seededRand()+0.5) * (max - min) + min;
 }
 //#endregion
 
@@ -568,7 +612,7 @@ function menuUpd() {
 function menuClk() {
     if (selectedUi !== undefined) {
         switch (selectedUi.y) {
-            case 220: ship(); break;
+            case 220: ship(0); break;
             case 270:
                 if ("g" in localStorage)
                     resume();
@@ -590,9 +634,6 @@ function setCanvasSize(width, height) {
     canvas2d.height = height;
     textStart = canvas2d.width*.1;
 }
-//  #endregion
-//  #region game
-
 //  #endregion
 //  #region intro (deleted)
 /*var intro_dialogue = "";
@@ -633,41 +674,253 @@ async function introAsc() {
     }
 }*/
 //  #endregion
-
 //  #region ship
 var ship_data = {
     notfirsttime: false,
     shiprepaired: false,
+    fadein: 1,
     x: 0,
     y: 0,
     z: 0
 };
-var ship_fadeIn = 0;
-function ship() {
+var player_data = {
+    curmdl: undefined,
+    runanim: 0,
+    lastanim: 0,
+    x: 0,
+    y: 0,
+    c: 0,
+    offx: 0,
+    offy: 0,
+    lastx: 0,
+    lasty: 0
+};
+function ship(shipScene) {
     curLoop = shipUpd;
     curClick = Function();
-    lockMouse = true;
+    //lockMouse = true;
 
-    loadScene(0);
+    loadScene(shipScene);
 
     setDialogueFontSize();
 
-    addSceneObj(tfm(0, 3, 0), 7);
-    //shipFadeAsc();
+    player_data.curmdl = addSceneObj(tfm(player_data.x, 2.6, player_data.y), 7);
+    shipFadeAsc();
 }
 function shipUpd() {
     drawUi(-1);
-    //canvas2dctx.globalAlpha = ship_fadeIn;
-    //canvas2dctx.fillStyle = "#000";
-    //canvas2dctx.fillRect(0, 0, canvas2d.width, canvas2d.height);
+    if (l) {
+        player_data.x += 0.03;
+        player_data.c = 0;
+    } else if (r) {
+        player_data.x -= 0.03;
+        player_data.c = Math.PI;
+    }
+    if (u) {
+        player_data.y += 0.03;
+        player_data.c = Math.PI/2;
+    } else if (d) {
+        player_data.y -= 0.03;
+        player_data.c = -Math.PI/2;
+    }
+
+    for (var n = 0; n < scene.length; n++) { //for in loop
+        var i = scene[n];
+        if (i.mdl >= 7 && i.mdl <= 9)
+            continue;
+        var mdlMiddle = modelm[i.mdl];
+        if ((i.tfm.x-mdlMiddle) < (player_data.x+.45) && (player_data.x-.45) < (i.tfm.x-mdlMiddle)) {
+            if (i.tfm.x > player_data.x) { //push left
+                player_data.x = ~~(player_data.x*10)/10;
+            } else {
+                player_data.x = ~~(player_data.x*10+1)/10;
+            }
+        }
+    }
+
+    if (player_data.x != player_data.lastx ||
+        player_data.y != player_data.lasty ||
+        player_data.lastanim != player_data.runanim) {
+        removeSceneObj(player_data.curmdl);
+        player_data.curmdl = addSceneObj(tfm(player_data.x + player_data.offx, 2.6, player_data.y + player_data.offy, player_data.c), player_data.runanim);
+        player_data.lastx = player_data.x;
+        player_data.lasty = player_data.y;
+        player_data.lastanim = player_data.runanim;
+    }
+    switch (curScene) {
+        case 0:
+            if (-0.42 < player_data.x && player_data.x < 0.42 &&
+                2.73 < player_data.y && player_data.y < 3.46) {
+                space();
+            }
+            if (player_data.y < -4.2) {
+                player_data.y = 2.8;
+                cam.z = 2.8; //offset just a little bit to give a nudge effect when we change scenes
+                loadScene(1);
+            }
+            break;
+        case 1:
+            if (player_data.y > 3.2) {
+                player_data.y = -3.8;
+                cam.z = -5.6;
+                loadScene(0);
+            }
+            break;
+    }
+    cam.x += (player_data.x-cam.x) * 0.1;
+    cam.y = 9;
+    cam.z += ((player_data.y-2.6)-cam.z) * 0.1;
+    cam.a = -1.1;
+    cam.b = Math.PI;
+    //cam.a = 0.6;
+    canvas2dctx.globalAlpha = ship_data.fadein;
+    canvas2dctx.fillStyle = "#000";
+    canvas2dctx.fillRect(0, 0, canvas2d.width, canvas2d.height);
+    if (ship_data.fadein > 0)
+        ship_data.fadein -= 0.002;
 }
 async function shipFadeAsc() {
-    ship_fadeIn = 1;
-    await sleep(2000);
-    for (i in new Array(100)) {
-        ship_fadeIn -= 0.01;
-        await sleep(50);
+    var frames = [7,8,7,9];
+    var frame = 0;
+    while (true) {
+        await sleep(10);
+        if (u || d || l || r) {
+            player_data.runanim = frames[frame%4];
+            frame++;
+            await sleep(190);
+        } else {
+            player_data.runanim = 7;
+        }
     }
+    //ship_fadeIn = 1;
+    //await sleep(2000);
+    //for (i in new Array(100)) {
+    //    ship_fadeIn -= 0.01;
+    //    await sleep(50);
+    //}
+}
+//  #endregion
+//  #region space
+var space_data = {
+    x: 0,
+    y: 0,
+    xv: 0,
+    yv: 0,
+    c: 0,
+    cv: 0,
+    fv: 0,
+    offx: 0,
+    offy: 0,
+    shipmdl: 0,
+    starbuffer: {},
+    starsloaded: {},
+    starcheck: 0,
+    xp:0,yp:0,xd:0,yd:0
+};
+function space() {
+    scene = [];
+    curLoop = spaceUpd;
+    curClick = Function();
+    //lockMouse = true;
+
+    //loadScene(0);
+
+    setDialogueFontSize();
+
+    space_data.curmdl = addSceneObj(tfm(space_data.x, 3, space_data.y), 16);
+    spaceLoadStarfield(0, 0);
+    shipFadeAsc();
+}
+function starLoaded(x, y) {
+    return space_data.starsloaded[x+","+y] != undefined;
+}
+function spaceUpd() {
+    if (l) {
+        space_data.cv = -0.04;
+    } else if (r) {
+        space_data.cv = 0.04;
+    }
+    if (u) {
+        space_data.fv += 0.005;
+    } else if (d) {
+        space_data.fv -= 0.003;
+    }
+    space_data.xv = Math.sin(-space_data.c)*space_data.fv;
+    space_data.yv = Math.cos(-space_data.c)*space_data.fv;
+    space_data.c += space_data.cv;
+    space_data.cv /= 1.1;
+    space_data.fv /= 1.05;
+    space_data.x += space_data.xv;
+    space_data.y += space_data.yv;
+    space_data.curmdl.tfm = tfm(space_data.x, 3, space_data.y, space_data.c);
+
+    space_data.starcheck--;
+    if (space_data.starcheck < 1) {
+        drawUi(-1);
+        canvas2dctx.fillStyle = "#fff";
+        canvas2dctx.fillText(space_data.x + "," + space_data.y, 10, 20);
+        for (var i = 0; i < 4; i++) {
+            //unvar
+            space_data.xp = ~~(space_data.x/100)+[0,1][i%2];
+            space_data.yp = ~~((space_data.y+50)/100)+[0,0,1,1][i];
+            canvas2dctx.fillText(space_data.xp + "," + space_data.yp, 10, 40+(i*20));
+            if (!starLoaded(space_data.xp,space_data.yp)) {
+                space_data.xd = ~~( space_data.x    /100)+[2,0][i%2];   //these positions are wrong because it's
+                space_data.yd = ~~((space_data.y+50)/100)+[2,2,0,0][i]; //deleting chunks that should be loaded
+                //console.log("trying to kill " + del);
+                if (starLoaded(space_data.xd, space_data.yd)) {
+                    //console.log("killing " + del);
+                    spaceKillStarfield(space_data.xd, space_data.yd);
+                    delete space_data.starsloaded[space_data.xd+","+space_data.yd];
+                }
+                space_data.starsloaded[space_data.xp+","+space_data.yp] = " ";
+                spaceLoadStarfield(space_data.xp, space_data.yp);
+                //console.log("loading at " + cp);
+            }
+        }
+        space_data.starcheck = 50;
+    }
+
+    cam.x += (space_data.x-cam.x) * 0.1;
+    cam.y = 9;
+    cam.z += ((space_data.y-2.6)-cam.z) * 0.1;
+    cam.a = -1.1;
+    cam.b = Math.PI;
+}
+async function spaceLoadStarfield(x, y) {
+    seed = 0.1+Math.abs(1000/((17*23+x)*23+y)); //hash function
+    space_data.starbuffer[x+","+y] = [];
+    for (var i = 0; i < 50; i++) {
+        space_data.starbuffer[x+","+y].push(
+            addSceneObj(
+                tfm(
+                    randRange(x*100-100,(x+1)*100-100),
+                    (i%2==0)?-60:-90,
+                    randRange(y*100-100,(y+1)*100-100)
+                ),
+            21)
+        );
+    }
+}
+async function spaceKillStarfield(x, y) {
+    var sb = space_data.starbuffer[x+","+y];
+    for (var i = 0; i < sb.length; i++) {
+        removeSceneObj(sb[i]);
+    }
+    sb = [];
+}
+//  #endregion
+//  #region planets
+function planets() {
+    curLoop = planetsUpd;
+    curClick = planetsShoot;
+    loadScene(-1);
+}
+function planetsUpd() {
+
+}
+function planetsShoot() {
+
 }
 //  #endregion
 //#endregion
