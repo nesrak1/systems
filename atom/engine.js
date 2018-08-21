@@ -914,7 +914,7 @@ function space() {
     cam.x = space_data.x;
     cam.z = space_data.y-2.6;
     spaceLoadStarfield(0, 0);
-    shipFadeAsc();
+    shipAnimAsc();
 }
 function starLoaded(x, y) {
     return space_data.starsloaded[x+","+y] != undefined;
