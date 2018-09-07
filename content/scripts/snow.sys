@@ -1,0 +1,16 @@
+$YS
+cor 2,6|5
+cor 6,6|5
+cor 2,8|0
+cor 6,8|2
+sng 2,2|0
+sng 6,2|2
+trn left,2,8|4
+trn right,4,8|4
+cor 2,4|0
+cor 6,4|3
+cor 2,5|0
+cor 6,5|0
+trn left,3,4|0
+trn right,5,4|8
+big 4,4|7

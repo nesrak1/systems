@@ -1,6 +1,5 @@
 var dialogue = [
-    /*intro_1:*/ "It is the year 2165.\nMany people are living on space\nstations scattered around the galaxy.\n",
-    /*intro_2:*/ "The galaxy is on the verge of war\nas the XI corp has developed\na new portal jumping device.\n",
-    /*intro_3:*/ "You were one of the first to test it.\nBut as you went through,\nyou forgot who you were...",
-    
+"boss room code,hey joe,when boss disappeared, so did the code to his office. i wonder if we can find a way to open it up somehow? i'm trying to develop something in the lab to fry the circutry but i've had no success. let me know if you figure anything out. oh, and if you need to code to my office, it's 2948",
+"do they know,do they know? i could be out of my mind right now, but i keep seeing people disappear. first boss, then kantra. for now, we're sleeping on the work floor.",
+"the solution,literally the solution ha. jokes aside, it won't be easy. we'll need bar soap (that one's easy), miotite, kofkis, and blustone. of course miotite and blustone are on the planets but kofkis is on the third floor of the station, and we have no access to it. guess we'll never figure out what he was trying to give us."
 ];

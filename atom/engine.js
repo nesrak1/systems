@@ -16,6 +16,7 @@ var modelc = []; //colors
 var modelm = []; //centers [middles]
 var imgc = []; //images
 var scened = []; //scenes
+var leveld = []; //bh levels
 var cam = {x:0,y:0,z:0,a:0,b:0,c:0};
 var curScene = 0;
 
@@ -35,7 +36,7 @@ var textStart = 64;
 //#region models + textures
 function voxelize() {
     //use voxelbox to generate strings, then copy them into data.js
-    for (var idx = 25; idx < 51; idx++) {
+    for (var idx = 25; idx < 91; idx++) {
         //var d = data[idx].split("").map(Number); good for 10x10x10 but not bigger
         var d = data[idx].split("").map(n => parseInt(n,36));
         var verts = [];
@@ -57,29 +58,31 @@ function voxelize() {
             var x1,y1,z1,x2,y2,z2,mat;
             if (i == placeSingle)
                 i++;
-            var off = (idx>31&&idx<35||idx==41)?-0.5:0; //hack for rotating objects with odd width/height
-            x1 = d[i]-~~(d[0]/2)+off;
+            var off = (idx>31&&idx<35||idx==41||(idx>50&&idx<55))||idx==43?-0.5:0; //hack for rotating objects with odd width/height
+            var xoff = ((idx==45)?24:0);
+            x1 = d[i]-~~(d[0]/2)+off-xoff;
             y1 = d[i+2]-~~(d[2]/2)+off;
             z1 = d[i+1]-~~(d[1]/2)+off;
             if (i >= placeSingle) {
-                x2 = x1;
+                x2 = x1-xoff;
                 y2 = y1;
                 z2 = z1;
                 mat = mats[d[i+3]];
             } else {
-                x2 = d[i+3]-~~(d[0]/2)+off;
+                x2 = d[i+3]-~~(d[0]/2)+off-xoff;
                 y2 = d[i+5]-~~(d[2]/2)+off;
                 z2 = d[i+4]-~~(d[1]/2)+off;
                 mat = mats[d[i+6]];
             }
-            var sz = idx==47?5:idx>47?2:10;
+            var sz = idx==47?5:idx>47&&idx<51?2:idx>63&&idx<71?2.5:10;
+            var sf = (10/sz-1)*0.1;
             ver = createCubeOfDims(
                 0.0+x1/-sz,
                 0.0+y1/ sz,
                 0.0+z1/ sz,
-               -0.1+x2/-sz,
-                0.1+y2/ sz,
-                0.1+z2/ sz
+               -0.1+x2/-sz-sf,
+                0.1+y2/ sz+sf,
+                0.1+z2/ sz+sf
             );
             for (j = 0; j < 72; j++) {
                 verts[j+(c*72)] = ver[j];
@@ -88,8 +91,9 @@ function voxelize() {
                 0,0,1,0,0,1,0,0,1,0,0,1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,1,0,0,1,0,0,1,0,0,1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0
             ]);
             var glass = (mat[0] == 0 && mat[1] == 8 && mat[2] == 8);
-            var colConv = glass ? 0 : 0.125;
-            var alpha = glass ? 0.5 : 1;
+            var trans = (mat[0] == 8 && mat[1] == 0 && mat[2] == 8);
+            var colConv = glass || trans ? 0.02 : 0.125;
+            var alpha = glass ? 0.5 : trans ? 0 : 1;
             for (j = 0; j < 24; j++) {
                 colrs = colrs.concat([
                     mat[0]*colConv,mat[1]*colConv,mat[2]*colConv,alpha
@@ -152,7 +156,7 @@ function createCubeOfDims(x1,y1,z1,x2,y2,z2) {
 
 function drawsvg() {
     //use svgcompress to generate strings, also in data.js
-    for (var idx = 60; idx < 66; idx++) {
+    for (var idx = 100; idx < 106; idx++) {
         var canvas = document.createElement("canvas");
         canvas.width = 2 ** (parseInt(data[idx][0]) + 3);
         canvas.height = 2 ** (parseInt(data[idx][1]) + 3);
@@ -177,14 +181,28 @@ function drawsvg() {
     }
 }
 
+function loadsys() {
+    for (var idx = 106; idx < 107; idx++) {
+        leveld[idx-106] = [];
+        var d = data[idx].split("").map(n => parseInt(n,36));
+        var l = d.length/5;
+        for (var i in loop(l)) {
+            i = parseInt(i);
+            leveld[idx-106].push([d[i], d[l+i], d[2*l+i], d[3*l+i], d[4*l+i]]);
+        }
+    }
+}
+
 function buildscene() {
-    for (var idx = 0; idx < 2; idx++) {
+    for (var idx = 0; idx < 5; idx++) {
         var l = parseInt(data[idx].slice(0, 2));
         var d = data[idx].substr(2, l*9).match(/[\d][\d][\d]/g).map(n => parseInt(n));
-        var m = data[idx].slice(2 + l*9).match(/[\d][\d]/g).map(n => parseInt(n));
+        var m = data[idx].slice(5 + l*9).match(/[0-9a-z]/g).map(n => parseInt(n, 36));
         var s = [];
+        var j = 2 + l*9;
+        
         for (var i = 0; i < d.length; i += 3) {
-            s.push({x:d[i],y:d[i+1],z:d[i+2],m:m[i/3]});
+            s.push({x:d[i],y:d[i+1],z:d[i+2],m:m[i/3]+parseInt(data[idx].slice(j, j+3),10)});
         }
         scened.push(s);
     }
@@ -289,10 +307,11 @@ function setup() {
     voxelize();
     drawsvg();
     buildscene();
+    loadsys();
 
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.enable(gl.BLEND);
-	gl.enable(gl.CULL_FACE);
+	//gl.enable(gl.CULL_FACE);
 
     curLoop = menu;
     requestAnimationFrame(render);
@@ -381,8 +400,8 @@ function move(len, deg) {
     cam.z += len * Math.sin(((-cam.b*180/Math.PI+deg)%360)*Math.PI/180);
 }
 var eUp = true;
-var keys = [0,0,0,0,0];
-document.onkeydown=document.onkeyup=e=>keys[[87,65,83,68,69].indexOf(e.which)]=e.type[5];
+var keys = [0,0,0,0,0,0,0];
+document.onkeydown=document.onkeyup=e=>keys[[38,37,40,39,90,88,16].indexOf(e.which)]=e.type[5];
 //var u=l=d=r=0;onkeydown=onkeyup=e=>top['lld,rlurdu'[e.which%32%17]]=e.type[5];
 //#endregion
 //#region loop
@@ -399,7 +418,22 @@ function render() {
     curLoop();
 
     scene.forEach(function(obj) {
-        renderObj(obj);
+        if (obj.pss == 0)
+            renderObj(obj);
+    });
+
+    gl.colorMask(false, false, false, false);
+
+    scene.forEach(function(obj) {
+        if (obj.pss == 1)
+            renderObj(obj);
+    });
+
+    gl.colorMask(true, true, true, true);
+
+    scene.forEach(function(obj) {
+        if (obj.pss == 2)
+            renderObj(obj);
     });
 
     stats.end();
@@ -410,8 +444,8 @@ function render() {
 //#region render and scene
 var proj, vm;
 function renderObj(obj) {
-    proj = new Float32Array(persp(gl.canvas.clientWidth / gl.canvas.clientHeight, 0.1, 150));
-    vm = new Float32Array(lookAtFps([cam.x-obj.tfm.x,cam.y-obj.tfm.y,cam.z-obj.tfm.z],cam.a,cam.b,obj.tfm.c));
+    proj = persp(gl.canvas.clientWidth / gl.canvas.clientHeight, 0.1, 150);
+    vm = lookAtFps(cam.x-obj.tfm.x,cam.y-obj.tfm.y,cam.z-obj.tfm.z,cam.a,cam.b,obj.tfm.c);
     enableBuffer(resourceMeta.aVertexPosition, obj.pos, 3);
     enableBuffer(resourceMeta.aVertexNormal, obj.nrm, 3);
     enableBuffer(resourceMeta.aVertexColor, obj.col, 4);
@@ -432,7 +466,7 @@ function enableBuffer(attr, buff, compCount = undefined/*optional*/) {
     }
 }
 
-function addSceneObj(transform,modelIndex/*,shader*/) {
+function addSceneObj(transform,modelIndex,pass = 0/*,shader*/) {
     var positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(modelv[modelIndex]), gl.STATIC_DRAW);
@@ -456,7 +490,8 @@ function addSceneObj(transform,modelIndex/*,shader*/) {
         idx: indexBuffer,
         nrm: normalBuffer,
         col: colorBuffer,
-        mdl: modelIndex
+        mdl: modelIndex,
+        pss: pass
     });
 
     return scene[scene.length-1];
@@ -467,8 +502,11 @@ function removeSceneObj(obj) {
         scene.splice(idx, 1);
     }
 }
-function loadScene(sceneIdx) {
-    scene = [];
+function loadScene(sceneIdx, dontClearObjects = false) {
+    if (!dontClearObjects)
+        scene = [];
+    invisWallScene = [];
+    laserScene = [];
     if (sceneIdx == -1) return;
     for (var s in scened[sceneIdx]) {
         s = scened[sceneIdx][s];
@@ -504,7 +542,7 @@ function transform(posX, posY, posZ, rotX, rotY, rotZ) {
 }
 //https://www.3dgep.com/understanding-the-view-matrix/
 //"The function to implement this camera model might look like this:"
-function lookAtFps(eye, pitch, yaw, rot) {
+function lookAtFps(eyex, eyey, eyez, pitch, yaw, rot) {
     var cosPitch = Math.cos(((pitch+90)%180)-90);
     var sinPitch = Math.sin(((pitch+90)%180)-90);
     var cosYaw = Math.cos(yaw%360);
@@ -523,29 +561,15 @@ function lookAtFps(eye, pitch, yaw, rot) {
     var m=Math.cos(rot);
     var o=Math.sin(rot);
 
-    return [
+    return Float32Array.of(
         a*m+g*o,b*m+h*o,c*m+i*o,0,
         xaxis[1],yaxis[1],zaxis[1],0,
         a*-o+g*m,b*-o+h*m,c*-o+i*m,0,
-        -dot3(xaxis,eye),-dot3(yaxis,eye),-dot3(zaxis,eye),1
-    ];
-
-    //return [
-    //    xaxis[0],yaxis[0],zaxis[0],0,
-    //    d*m+g*-o,h*-o+m*e,f*m+i*-o,0,
-    //    d*o+g*m,h*m+o*e,f*o+i*m,0,
-    //    -dot3(xaxis,eye),-dot3(yaxis,eye),-dot3(zaxis,eye),1
-    //];
-
-    //return [
-    //    xaxis[0],yaxis[0],zaxis[0],0,
-    //    xaxis[1],yaxis[1],zaxis[1],0,
-    //    xaxis[2],yaxis[2],zaxis[2],0,
-    //    -dot3(xaxis,eye),-dot3(yaxis,eye),-dot3(zaxis,eye),1
-    //];
+        -dot3(xaxis,eyex,eyey,eyez),-dot3(yaxis,eyex,eyey,eyez),-dot3(zaxis,eyex,eyey,eyez),1
+    );
 }
-function dot3(u, v) {
-    return u[0]*v[0]+u[1]*v[1]+u[2]*v[2];
+function dot3(u, v0,v1,v2) {
+    return u[0]*v0+u[1]*v1+u[2]*v2;
 }
 function cross(u, v) {
     return [u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
@@ -557,6 +581,9 @@ function norm(u) {
     else
         return [0,0,0];
 }
+function distanceFrom(x0,y0, x1,y1) {
+    return Math.sqrt((x0-x1)**2+(y0-y1)**2);
+}
 
 //https://webgl2fundamentals.org/webgl/lessons/webgl-3d-perspective.html
 //"Here's a function to build the matrix."
@@ -564,12 +591,12 @@ function persp(aspect, near, far) {
     var fov = 0.7854;
     var f = Math.tan(Math.PI * 0.5 - 0.5 * fov);
     var rangeInv = 1.0 / (near - far);
-    return [
+    return Float32Array.of(
         f/aspect,0,0,0,
         0,f,0,0,
         0,0,(near+far)*rangeInv,-1,
         0,0,near*far*rangeInv*2,0
-    ];
+    );
 }
 //bridges
 function tfm(posX, posY, posZ, rotZ = 0) {
@@ -579,14 +606,6 @@ function tfm(posX, posY, posZ, rotZ = 0) {
         z: posZ,
         c: rotZ
     }
-}
-
-function setDialogueFontSize() {
-    fontSize = 999;
-    do {
-        fontSize--;
-        canvas2dctx.font = fontSize + "px monospace";
-    } while (canvas2dctx.measureText("f".repeat(42)).width > canvas2d.width - textStart);
 }
 
 function sleep(ms) {
@@ -606,6 +625,13 @@ function randRange(min, max) {
 function loop(i) {
     return [...Array(i).keys()];
 }
+
+function deleteArrayItem(array, value) {
+    array.splice(array.indexOf(value), 1);
+}
+function deleteArrayItemIndex(array, index) {
+    array.splice(index, 1);
+}
 //#endregion
 
 //#region gamecode
@@ -623,7 +649,7 @@ function menu() {
     curClick = menuClk;
 }
 function menuUpd() {
-    drawUi(70);
+    drawUi(110);
 }
 function menuClk() {
     if (selectedUi !== undefined) {
@@ -711,7 +737,17 @@ var player_data = {
     offx: 0,
     offy: 0,
     lastx: 0,
-    lasty: 0
+    lasty: 0,
+    lockx: 0,
+    locky: 0,
+    locktimer: 0
+};
+var base_data = {
+    curbaseid: 0,
+    busted: 0,
+    masks: [],
+    cams: [],
+    povs: [] //los but then it would be loss like the meme haha im so funny
 };
 function ship(shipScene) {
     curLoop = shipUpd;
@@ -720,21 +756,15 @@ function ship(shipScene) {
 
     ship_data.inShip = true;
 
-    loadScene(shipScene);
-
-    setDialogueFontSize();
+    loadShipScene(shipScene);
 
     cam.x = player_data.x;
     cam.z = player_data.y-2.6;
     player_data.curmdl = addSceneObj(tfm(player_data.x, 2.6, player_data.y), 7);
 
-    if (ship_data.docked) {
-        addSceneObj(tfm(-4.5,3.2,0), 3);
-    } else {
-        addSceneObj(tfm(-6,1.6,0), 1);
-        addSceneObj(tfm(-6,3.2,1.5), 6);
-        addSceneObj(tfm(-6,3.2,-1.6), 6);
-    }
+    cam.y = 9;
+    cam.a = -1.1;
+    cam.b = Math.PI;
 
     shipAnimAsc();
 }
@@ -755,18 +785,18 @@ function shipUpd() {
             player_data.c = -Math.PI/2;
         }
     } else {
-        var ship = data[71][data[71].length-1]; //todo: replace with literal
+        var ship = data[111][data[111].length-1]; //todo: replace with literal
         ship.x = 187-space_data.x/1.5;
         ship.y = 255-space_data.y/1.5;
-        drawUi(71);
+        drawUi(111);
     }
 
-    for (var n = 0; n < scene.length; n++) { //for of was making lag spikes?
+    for (var n of loop(scene.length)) {
         var i = scene[n];
-        if (i.mdl > 6 && i.mdl < 10)
+        if (i.mdl > 6 && i.mdl < 10 || i.mdl == 18 || i.mdl == 20 || i.mdl == 56)
             continue;
         var mdlMiddle = modelm[i.mdl];
-        var midX = mdlMiddle[0]/10;
+        var midX = mdlMiddle[0]/10; //i.tfm.c==0?0:1 hack to work with rotation
         var midY = mdlMiddle[1]/10;
         var pmid = 0.2;
         if ((i.tfm.x-midX) < (player_data.x+pmid) && (player_data.x-pmid) < (i.tfm.x+midX) &&
@@ -823,23 +853,125 @@ function shipUpd() {
             if (player_data.y < -4.2) {
                 player_data.y = 2.8;
                 cam.z = 2.8; //offset just a little bit to give a nudge effect when we change scenes
-                loadScene(1);
+                loadShipScene(1);
             }
             break;
         case 1:
             if (player_data.y > 3.2) {
                 player_data.y = -3.8;
                 cam.z = -5.6;
-                loadScene(0);
+                loadShipScene(0);
+            }
+            break;
+        case 2:
+            if (keys[4] && eUp) {
+                eUp = false;
+                if (5 < player_data.x && player_data.x < 6.2 &&
+                    -0.7 < player_data.y && player_data.y < 0.7) {
+                    removeSceneObj(base_data.povs[1]);
+                    deleteArrayItemIndex(base_data.povs, 1);
+                    deleteArrayItemIndex(base_data.cams, 1);
+                    player_data.lockx = -5;
+                    player_data.locky = 5;
+                    player_data.locktimer = 120;
+                }
+                if (-5.1 < player_data.x && player_data.x < -3.8 &&
+                    4 < player_data.y && player_data.y < 5.4) {
+                    removeSceneObj(base_data.povs[5]);
+                    removeSceneObj(base_data.povs[6]);
+                    deleteArrayItemIndex(base_data.povs, 5);
+                    deleteArrayItemIndex(base_data.cams, 5);
+                    deleteArrayItemIndex(base_data.povs, 5);
+                    deleteArrayItemIndex(base_data.cams, 5);
+                    player_data.lockx = -5;
+                    player_data.locky = -5;
+                    player_data.locktimer = 120;
+                }
+            } else if (!keys[4] && !eUp) {
+                eUp = true;
+            }
+            if (player_data.x < -6 && player_data.y < -3.6) {
+                player_data.x = 5.5;
+                cam.x = 6;
+                loadBase(1, false);
+            }
+            break;
+        case 3:
+            if (keys[4] && eUp) {
+                eUp = false;
+                if (-2.8 < player_data.x && player_data.x < -1.7 &&
+                    -10.5 < player_data.y && player_data.y < -9.1) {
+                    removeSceneObj(base_data.povs[0]);
+                    removeSceneObj(base_data.povs[1]);
+                    removeSceneObj(base_data.povs[2]);
+                    deleteArrayItemIndex(base_data.povs, 0);
+                    deleteArrayItemIndex(base_data.cams, 0);
+                    deleteArrayItemIndex(base_data.povs, 0);
+                    deleteArrayItemIndex(base_data.cams, 0);
+                    deleteArrayItemIndex(base_data.povs, 0);
+                    deleteArrayItemIndex(base_data.cams, 0);
+                    player_data.lockx = -5;
+                    player_data.locky = -12.5;
+                    player_data.locktimer = 120;
+                }
+            } else if (!keys[4] && !eUp) {
+                eUp = true;
+            }
+            if (player_data.x > 6 && player_data.y > -6) {
+                player_data.x = -5.5;
+                cam.x = -6;
+                loadBase(0, false);
+            }
+            if (player_data.x < -6.44 && player_data.y < -13.7) {
+                player_data.y = 6.5;
+                cam.z = 7;
+                player_data.x = -7.5;
+                cam.x = -7.5
+                loadBase(2, false);
+            }
+            break;
+        case 4:
+            if (keys[4] && eUp) {
+                eUp = false;
+                if (-2.8 < player_data.x && player_data.x < -1.7 &&
+                    -10.5 < player_data.y && player_data.y < -9.1) {
+                }
+            } else if (!keys[4] && !eUp) {
+                eUp = true;
+            }
+            if (player_data.x > 6 && player_data.y > -6) {
+                player_data.x = -5.5;
+                cam.x = -6;
+                loadBase(0, false);
+            }
+            if (player_data.x < -6.44 && player_data.y < -13.7) {
+                player_data.y = 6.5;
+                cam.z = 7;
+                player_data.x = -7.5;
+                cam.x = -7.5
+                loadBase(2, false);
             }
             break;
     }
 
+    if (curScene > 1)
+        updateCams();
+
+    //mop
+    var x = player_data.x;
+    var y = player_data.y;
+    if (player_data.locktimer > 0) {
+        player_data.x = player_data.lockx;
+        player_data.y = player_data.locky;
+    }
     cam.x += (player_data.x-cam.x) * 0.1;
-    cam.y = 9;
+    //cam.y = 9;
     cam.z += ((player_data.y-2.6)-cam.z) * 0.1;
-    cam.a = -1.1;
-    cam.b = Math.PI;
+    if (player_data.locktimer > 0) {
+        player_data.x = x;
+        player_data.y = y;
+        player_data.locktimer--;
+    }
     //cam.a = 0.6;
     if (ship_data.fadein > 0) {
         drawUi(-1);
@@ -850,6 +982,11 @@ function shipUpd() {
         if (ship_data.fadein <= 0) {
             canvas2dctx.globalAlpha = 1;
         }
+    } else {
+        drawUi(-1);
+        canvas2dctx.globalAlpha = 1;
+        canvas2dctx.fillStyle = "#f00";
+        canvas2dctx.fillRect(0, canvas2d.height-((base_data.busted/200)*canvas2d.height), 10, (base_data.busted/200)*canvas2d.height);
     }
 }
 function shipClk() {
@@ -860,13 +997,31 @@ function shipClk() {
         }
     }
 }
+function loadShipScene(shipScene) {
+    scene = [];
+
+    spaceLoadStarfield(0, 0);
+    spaceLoadStarfield(1, 0);
+    spaceLoadStarfield(0, 1);
+    spaceLoadStarfield(1, 1);
+
+    loadScene(shipScene, true);
+
+    if (!ship_data.docked) {
+        addSceneObj(tfm(-4.5,3.2,0), 3);
+    } else {
+        addSceneObj(tfm(-6,1.6,0), 1);
+        addSceneObj(tfm(-6,3.2,1.5), 6);
+        addSceneObj(tfm(-6,3.2,-1.6), 6);
+    }
+}
+var shipFrames = [7,8,7,9];
 async function shipAnimAsc() {
-    var frames = [7,8,7,9];
     var frame = 0;
     while (true) {
         await sleep(10);
         if (keys.slice(0,4).includes("w")) {
-            player_data.runanim = frames[frame%4];
+            player_data.runanim = shipFrames[frame%4];
             frame++;
             await sleep(190);
         } else {
@@ -882,6 +1037,99 @@ async function shipAnimAsc() {
     //    await sleep(50);
     //}
 }
+function loadBase(levelId, setLoc = true) {
+    base_data.cams = [];
+    base_data.povs = [];
+    base_data.masks = [];
+    if (setLoc) {
+        player_data.x = [5, 5][levelId];
+        player_data.y = [5.5, -5.5][levelId];
+    }
+    levelId += 2;
+    loadScene(levelId);
+    for (var i of data[112+levelId]) {
+        var r = i[2]*(Math.PI/2);
+        var c = addSceneObj(tfm(i[0], 3.5, i[1], r), 18);
+        base_data.povs.push(addSceneObj(tfm(i[0], 2, i[1], r), 20, 2));
+        c.v = 0;
+        c.r = r;
+        base_data.cams.push(c);
+    }
+    if (levelId == 1+2) {
+        base_data.masks.push(addSceneObj(tfm(0.3, 2, -7.55, 0), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(-5.7, 2, -7.55, 0), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(-2.5, 2, -4.3, Math.PI/2), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(1.5, 2, -6, Math.PI/2), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(1.5, 2, -7, Math.PI/2), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(1.5, 2, -8, Math.PI/2), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(1.5, 2, -9, Math.PI/2), 56, 1));
+    }
+}
+function updateCams() {
+    var k = 0;
+    for (var i of base_data.cams) {
+        i.v += 0.01;
+        i.tfm.c = i.r + Math.sin(i.v)/4;
+        base_data.povs[k].tfm.c = i.tfm.c;
+        k++;
+        
+        var x = player_data.x;
+        var y = player_data.y;
+        var tfm = base_data.povs[k-1].tfm;
+        var x0 = tfm.x + 1 * Math.cos(tfm.c+(Math.PI/2));
+        var y0 = tfm.z + 1 * Math.sin(tfm.c+(Math.PI/2));
+        var xh = tfm.x + 1 * Math.cos(tfm.c-(Math.PI/2));
+        var yh = tfm.z + 1 * Math.sin(tfm.c-(Math.PI/2));
+        var xw = x0 + 4 * Math.cos(tfm.c);
+        var yw = y0 + 4 * Math.sin(tfm.c);
+
+        if (checkIfInArea(player_data.x, player_data.y, x0, y0, xw, yw, xh, yh) &&
+            !inHidingArea(player_data.x, player_data.y)) {
+            base_data.busted += 6;
+        }
+    }
+    if (base_data.busted > 0)
+        base_data.busted--;
+}
+//https://math.stackexchange.com/questions/1805724/detect-if-point-is-within-rotated-rectangles-bounds
+function checkIfInArea(x, y, x0, y0, xw, yw, xh, yh) {
+    var xu = xw - x0;
+    var yu = yw - y0;
+    var xv = xh - x0;
+    var yv = yh - y0;
+    var L = xu * yv - xv * yu;
+    if (L < 0) {
+        L = -L;
+        xu = -xu;
+        yv = -yv;
+    } else {
+        xv = -xv;
+        yu = -yu;
+    }
+
+    var u = (x - x0) * yv + (y - y0) * xv;
+    if (u < 0 || u > L)
+        return false;
+    else {
+        v = (x - x0) * yu + (y - y0) * xu;
+        if (v < 0 || v > L)
+            return false;
+        else
+            return true;
+    }
+}
+function inHidingArea(x, y) {
+    for (var i of base_data.masks) {
+        var midX = (i.c==0?6:4.5)/10;
+        var midY = (i.c==0?4.5:6)/10;
+        var pmid = 0.2;
+        if ((i.tfm.x-midX) < (player_data.x+pmid) && (player_data.x-pmid) < (i.tfm.x+midX) &&
+            (i.tfm.z-midY) < (player_data.y+pmid) && (player_data.y-pmid) < (i.tfm.z+midY))
+            return true;
+    }
+    
+    return false;
+}
 //  #endregion
 //  #region space
 var space_data = {
@@ -894,7 +1142,6 @@ var space_data = {
     fv: 0,
     offx: 0,
     offy: 0,
-    shipmdl: 0,
     starbuffer: {},
     starsloaded: {},
     starcheck: 0,
@@ -908,9 +1155,7 @@ function space() {
 
     //loadScene(0);
 
-    setDialogueFontSize();
-
-    space_data.curmdl = addSceneObj(tfm(space_data.x, 3, space_data.y), 16);
+    space_data.curmdl = addSceneObj(tfm(space_data.x, 3, space_data.y), 19);
     cam.x = space_data.x;
     cam.z = space_data.y-2.6;
     spaceLoadStarfield(0, 0);
@@ -947,6 +1192,18 @@ function spaceUpd() {
     space_data.y += space_data.yv;
     space_data.curmdl.tfm = tfm(space_data.x, 3, space_data.y, space_data.c);
 
+    var distanceToClosestPlanet = Math.min(
+        distanceFrom(space_data.x, space_data.y, -20, -140),
+        distanceFrom(space_data.x, space_data.y, -110, 310),
+        distanceFrom(space_data.x, space_data.y, -320, -110)
+    );
+    if (distanceToClosestPlanet < 5) {
+        space_data.fv *= (-1.1 - ((5-distanceToClosestPlanet)*0.3));
+    }
+    if (distanceFrom(space_data.x, space_data.y, -140, 70) < 3) {
+
+    }
+
     space_data.starcheck--;
     if (space_data.starcheck < 1) {
         drawUi(-1);
@@ -955,7 +1212,7 @@ function spaceUpd() {
         for (var i = 0; i < 4; i++) {
             //unvar
             space_data.xp = Math.floor((space_data.x+50)/100)+[0,1][i%2];
-            space_data.yp = Math.floor((space_data.y+50)/100)+[0,0,1,1][i];
+            space_data.yp = Math.floor((space_data.y+95)/100)+[0,0,1,1][i];
             //canvas2dctx.fillText(space_data.xp + "," + space_data.yp, 10, 40+(i*20));
             if (!starLoaded(space_data.xp,space_data.yp)) {
                 //remember: up is y+ and left is x+!
@@ -999,7 +1256,7 @@ function spaceUpd() {
 async function spaceLoadStarfield(x, y) {
     seed = 0.1+Math.abs(1000/((17*23+x)*23+y)); //hash function
     space_data.starbuffer[x+","+y] = [];
-    for (var i = 0; i < 50; i++) {
+    for(var i of loop(50)) {
         space_data.starbuffer[x+","+y].push(
             addSceneObj(
                 tfm(
@@ -1015,11 +1272,7 @@ async function spaceLoadStarfield(x, y) {
     if (x == -1 && y == 1) {
         space_data.starbuffer[x+","+y].push(
             addSceneObj(
-                tfm(
-                    -140,
-                    2,
-                    70
-                ),
+                tfm(-140, 2, 70),
             22)
         );
     }
@@ -1027,35 +1280,31 @@ async function spaceLoadStarfield(x, y) {
     if (x == 0 && y == -1) {
         space_data.starbuffer[x+","+y].push(
             addSceneObj(
-                tfm(
-                    -20,
-                    0,
-                    -140
-                ),
+                tfm(-20, 0, -140),
             23)
         );
     }
     if (x == 0 && y == 4) {
         space_data.starbuffer[x+","+y].push(
             addSceneObj(
-                tfm(
-                    -110,
-                    0,
-                    310
-                ),
+                tfm(-110, 0, 310),
             25)
         );
     }
     if (x == -3 && y == -1) {
         space_data.starbuffer[x+","+y].push(
             addSceneObj(
-                tfm(
-                    -320,
-                    0,
-                    -110
-                ),
+                tfm(-320, 0, -110),
             24)
         );
+    }
+    if (distanceFrom(space_data.x, space_data.y, -140, 70) < 7 ||
+        distanceFrom(space_data.x, space_data.y, -20, -140) < 12 ||
+        distanceFrom(space_data.x, space_data.y, -110, 310) < 12 ||
+        distanceFrom(space_data.x, space_data.y, -320, -110) < 12) {
+        ship_data.docked = true;
+    } else {
+        ship_data.docked = false;
     }
 }
 async function spaceKillStarfield(x, y) {
@@ -1067,16 +1316,206 @@ async function spaceKillStarfield(x, y) {
 }
 //  #endregion
 //  #region planets
-function planets() {
+var planets_data = {
+    nextSpawnTime: 160,
+    ships: [],
+    bullets: [],
+    enemybullets: [],
+    ground: [],
+    x: 0,
+    y: 10,
+    curmdl: 0,
+    shootTimer: 0,
+    lavaTimer: 0,
+    bubbleTimer: 0,
+    planet: -1,
+    event: 0,
+};
+function planets(planet) {
+    scene = [];
     curLoop = planetsUpd;
-    curClick = planetsShoot;
+    //curClick = planetsShoot;
+
+    //lockMouse = true;
+    
     loadScene(-1);
+    drawUi(-1);
+
+    var ground = ([39,46,52][planet]);
+    for (var i of loop(36)) {
+        planets_data.ground.push(
+            addSceneObj(tfm((~~(i/6)-2.5)*6, 0, ((i%6)+2)*6), ground)
+        );
+    }
+
+    planets_data.curmdl = addSceneObj(tfm(0, 1, 10), 19);
+    planets_data.planet = planet;
+
+    ship_data.fadein = 1;
+    seed = 0.12495 + (planet*0.001);
+    cam.x = 0;
+    cam.y = 15;
+    cam.z = 5;
+    cam.a = -1.3;
 }
 function planetsUpd() {
+    var speed = (keys[6])?0.08:0.12;
+    if (keys[1]) {
+        planets_data.x += speed;
+    } else if (keys[3]) {
+        planets_data.x -= speed;
+    }
+    if (keys[0]) {
+        planets_data.y += speed;
+    } else if (keys[2]) {
+        planets_data.y -= speed;
+    }
+    if (keys[4]) {
+        if (planets_data.shootTimer < 1) {
+            planets_data.shootTimer = 6;
+            planets_data.bullets.push(
+                addSceneObj(
+                    tfm(planets_data.x, 1, planets_data.y+0.05),
+                17)
+            );
+        }
+    }
 
-}
-function planetsShoot() {
+    planets_data.curmdl.tfm.x = planets_data.x;
+    planets_data.curmdl.tfm.z = planets_data.y;
 
+    planets_data.nextSpawnTime--;
+    planets_data.shootTimer--;
+    planets_data.lavaTimer--;
+    planets_data.bubbleTimer--;
+    if (planets_data.nextSpawnTime < 1) {
+        function spawnEnemy(x, y, xd, yd, mode, count, mdl) {
+            //planets_data.ships.push(
+            //    addSceneObj(
+            //        tfm(randRange(-6, 6), 1, cam.z+20),
+            //    ~~randRange(26,28))
+            //);
+            count = (count==0)?~~randRange(4,6):count;
+            for (var i in loop(count)) {
+                var xoff, yoff;
+                if (mode != 2) {
+                    xoff = randRange(-1.5,1.5);
+                    yoff = randRange(-1.5,1.5);
+                } else {
+                    xoff = (xd<4)?(-i/1.5):i/1.5;
+                    yoff = 0;
+                }
+                var obj = addSceneObj(tfm((x-4)*1.5, 1, y+6, mode==2?i*0.04:0), mdl);
+                obj.xd = (xd-4)*1.5+xoff;
+                obj.yd = yd+6+yoff;
+                obj.xd2 = (x-4)*1.5+xoff;
+                obj.yd2 = y+6+yoff;
+                obj.afm = 0;
+                planets_data.ships.push(obj);
+            }
+            //console.log("spawning at " + obj.xd2 + " " + obj.yd2 + " => " + obj.xd + " " + obj.yd + " " + (["corner","train","super","boss"][mode]));
+        }
+        var leveldata = leveld[0][planets_data.event];
+        switch (leveldata[0]) {
+            case 0: //corner
+                spawnEnemy(leveldata[1]<4?-1:9, 9, leveldata[1], leveldata[2], 0, leveldata[3], 27);
+                break;
+            case 2: //train
+                spawnEnemy(leveldata[1]==0?-1:9, leveldata[2], leveldata[1]==0?9:-1, leveldata[2], 2, leveldata[3], 27);
+                break;
+            case 1: //super
+                spawnEnemy(leveldata[1], 9, leveldata[1], leveldata[2], 1, leveldata[3], 27);
+                break;
+            case 3: //boss
+
+                break;
+        }
+        planets_data.nextSpawnTime = leveldata[4]*60;
+        planets_data.event++;
+        if (planets_data.event > leveld[0].length-1) {
+            console.log("done");
+            planets_data.nextSpawnTime = 99999999;
+        }
+    }
+    if (planets_data.lavaTimer < 1) {
+        planets_data.ground.push(
+            addSceneObj(
+                tfm(~~randRange(-9, 9), 0, ~~randRange(10, 26)),
+            [40,47,53][planets_data.planet])
+        );
+        planets_data.lavaTimer = randRange(15, 35);
+    }
+    for (var i of planets_data.ships) {
+        //i.tfm.z -= 0.05;
+        i.tfm.c += 0.03;
+        i.afm += 0.01;
+        //if (i.tfm.z < cam.z-5) {
+        if (i.afm > Math.PI*2) {
+            removeSceneObj(i);
+            planets_data.ships.splice(planets_data.ships.indexOf(i), 1);
+        }
+        var percent = (Math.cos(i.afm)+1);
+        i.tfm.x = i.xd+((i.xd2-i.xd)*percent);
+        i.tfm.z = i.yd+((i.yd2-i.yd)*percent);
+
+        if (i.afm%0.16<0.01) {
+            planets_data.enemybullets.push(
+                addSceneObj(
+                    tfm(i.tfm.x, 1, i.tfm.z, i.tfm.c+((i.afm%0.64)/0.16*Math.PI/2)),
+                17)
+            );
+        }
+
+        for (var j of planets_data.bullets) {
+            if ((Math.sqrt(Math.abs(i.tfm.x-j.tfm.x)**2) + (Math.abs(i.tfm.z-j.tfm.z)**2)) < 0.5) {
+                removeSceneObj(i);
+                removeSceneObj(j);
+                planets_data.ships.splice(planets_data.ships.indexOf(i), 1);
+                planets_data.bullets.splice(planets_data.bullets.indexOf(j), 1);
+            }
+        }
+    }
+    for (var i of planets_data.bullets) {
+        i.tfm.z += 0.25;
+        if (i.tfm.z > cam.z+20) {
+            removeSceneObj(i);
+        }
+    }
+    for (var i of planets_data.enemybullets) {
+        i.tfm.x += Math.sin(-i.tfm.c)/10;
+        i.tfm.z += Math.cos(-i.tfm.c)/10;
+        //i.tfm.z -= 0.05;//Math.sin(i.tfm.c)*0.5;
+        if (i.tfm.z > cam.z+20 || i.tfm.z < cam.z-5) {
+            removeSceneObj(i);
+        }
+    }
+    for (var i of planets_data.ground) {
+        i.tfm.z -= 0.2;
+        var isGround = [39,46,52].includes(i.mdl);
+        if (i.tfm.z < cam.z-10) {
+            if (isGround) {
+                i.tfm.z += 30;
+            } else {
+                removeSceneObj(i);
+                planets_data.ground.splice(planets_data.ground.indexOf(i), 1);
+            }
+        }
+        if (!isGround && planets_data.bubbleTimer < 1) {
+            if ([45].includes(i.mdl)) {
+                removeSceneObj(i);
+                planets_data.ground.splice(planets_data.ground.indexOf(i), 1);
+            } else {
+                //console.log("!");
+                var trans = i.tfm;
+                var mdl = i.mdl;
+                removeSceneObj(i);
+                planets_data.ground.splice(planets_data.ground.indexOf(i), 1);
+                planets_data.ground.push(i = addSceneObj(trans, mdl+1));
+            }
+        }
+    }
+    if (planets_data.bubbleTimer < 1)
+        planets_data.bubbleTimer = 8;
 }
 //  #endregion
 //#endregion

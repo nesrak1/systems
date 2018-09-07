@@ -122,9 +122,14 @@ function createSample(waveEquation, len) {
         var v = waveEquation(i);
         tex += wordByte((v<0)?v+65535:v).slice(0,-1);
     }
+    //looks like someone had the same idea
+    //https://github.com/Siorki/js13kgames/blob/master/2013%20-%20staccato/chiptune.js#L132
+    //may not need the = after atob
     dat = "RIFF"+wordByte(len*2+36)+"\0WAVEfmt "+atob("EAAAAAEAAQBErAAAiFgBAAIAEAA=")+"data"+wordByte(len)+"\0"+tex;
     return new Audio("data:audio/wav;base64,"+btoa(dat));
 }
+
+createSample(function(x){return (((Math.sin(x*Math.PI/180)**5)+Math.sin(x*Math.PI/180)**3)+(Math.sin(x*Math.PI/180)**6))}, 1000);
 
 var z = String.fromCharCode; //MOP
 function wordByte(num) {
@@ -142,4 +147,4 @@ function createGraph(equation, start, end, precision) {
     return graph;
 }
 
-read("");
+//read("");
