@@ -36,7 +36,7 @@ var textStart = 64;
 //#region models + textures
 function voxelize() {
     //use voxelbox to generate strings, then copy them into data.js
-    for (var idx = 25; idx < 140; idx++) {
+    for (var idx = 25; idx < 158; idx++) {
         //var d = data[idx].split("").map(Number); good for 10x10x10 but not bigger
         var d = data[idx].split("").map(n => parseInt(n,36));
         var verts = [];
@@ -74,7 +74,7 @@ function voxelize() {
                 z2 = d[i+4]-~~(d[1]/2)+off;
                 mat = mats[d[i+6]];
             }
-            var sz = idx==47?5:idx>47&&idx<51?2:(idx>63&&idx<71)||(idx>123&&idx<138)?2.5:10;
+            var sz = idx==47?5:idx>47&&idx<51?2:(idx>63&&idx<71)||(idx>123&&idx<138)||idx==145?2.5:10;
             var sf = (10/sz-1)*0.1; //scale fix, fixes connections when models are large (like lava)
             ver = createCubeOfDims(
                 0.0+x1/-sz,
@@ -156,7 +156,7 @@ function createCubeOfDims(x1,y1,z1,x2,y2,z2) {
 
 function drawsvg() {
     //use svgcompress to generate strings, also in data.js
-    for (var idx = 150; idx < 156; idx++) {
+    for (var idx = 160; idx < 166; idx++) {
         var canvas = document.createElement("canvas");
         canvas.width = 2 ** (parseInt(data[idx][0]) + 3);
         canvas.height = 2 ** (parseInt(data[idx][1]) + 3);
@@ -182,19 +182,19 @@ function drawsvg() {
 }
 
 function loadsys() {
-    for (var idx = 156; idx < 157; idx++) {
-        leveld[idx-156] = [];
+    for (var idx = 166; idx < 170; idx++) {
+        leveld[idx-166] = [];
         var d = data[idx].split("").map(n => parseInt(n,36));
         var l = d.length/5;
         for (var i in loop(l)) {
             i = parseInt(i);
-            leveld[idx-156].push([d[i], d[l+i], d[2*l+i], d[3*l+i], d[4*l+i]]);
+            leveld[idx-166].push([d[i], d[l+i], d[2*l+i], d[3*l+i], d[4*l+i]]);
         }
     }
 }
 
 function buildscene() {
-    for (var idx = 0; idx < 8; idx++) {
+    for (var idx = 0; idx < 9; idx++) {
         var l = parseInt(data[idx].slice(0, 2));
         var d = data[idx].substr(2, l*9).match(/[\d][\d][\d]/g).map(n => parseInt(n));
         var m = data[idx].slice(5 + l*9).match(/[0-9a-z]/g).map(n => parseInt(n, 36));
@@ -213,7 +213,6 @@ function drawUi(group) {
     canvas2dctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
     if (group == -1) return;
     var d = data[group];
-    canvas2dctx.font = "22px \"Lucida Sans Unicode\", \"Lucida Grande\", sans-serif"; //move into setup
     selectedUi = undefined;
     var offX = ~~Math.max(0, (canvas2d.width-640)/2);
     var offY = ~~Math.max(0, (canvas2d.height-480)/2);
@@ -288,6 +287,8 @@ function setup() {
 
     var vertexShader = loadShader(gl.VERTEX_SHADER, vertShaderSrc);
     var fragmentShader = loadShader(gl.FRAGMENT_SHADER, fragShaderSrc);
+
+    canvas2dctx.font = "22px \"Lucida Sans Unicode\", \"Lucida Grande\", sans-serif"; //move into setup
 
     shaderProgram = gl.createProgram();
     gl.attachShader(shaderProgram, vertexShader);
@@ -653,7 +654,7 @@ function menu() {
     curClick = menuClk;
 }
 function menuUpd() {
-    drawUi(160);
+    drawUi(170);
 }
 function menuClk() {
     if (selectedUi !== undefined) {
@@ -722,14 +723,14 @@ async function introAsc() {
 //  #endregion
 //  #region ship
 var ship_data = {
-    notfirsttime: false,
     shiprepaired: false,
     fadein: 1,
-    uiOpen: false,
+    tutUiOpen: false,
+    firstTimeTut: true,
     mapX: 0,
     mapY: 0,
     inShip: true,
-    docked: false,
+    docked: false
 };
 var player_data = {
     curmdl: undefined,
@@ -747,9 +748,16 @@ var player_data = {
     locktimer: 0
 };
 var base_data = {
+    firsttime: true,
+    itemfirsttime: true,
+    tutorialOpen: false,
+    itemTakeOpen: false,
+    notAllItemsOpen: false,
     curbaseid: 0,
     busted: 0,
     specialitem: undefined,
+    collecteditems: [0,0,0],
+    deactivatedcameras: [0,0],
     masks: [],
     cams: [],
     povs: [] //los but then it would be loss like the meme haha im so funny
@@ -763,6 +771,11 @@ function ship(shipScene) {
 
     loadShipScene(shipScene);
 
+    if (ship_data.firstTimeTut) {
+        ship_data.firstTimeTut = false;
+        ship_data.tutUiOpen = true;
+    }
+
     cam.x = player_data.x;
     cam.z = player_data.y-2.6;
     player_data.curmdl = addSceneObj(tfm(player_data.x, 2.6, player_data.y), 7);
@@ -774,7 +787,11 @@ function ship(shipScene) {
     shipAnimAsc();
 }
 function shipUpd() {
-    if (!ship_data.uiOpen) {
+    if (!ship_data.uiOpen &&
+        !base_data.tutorialOpen &&
+        !base_data.itemTakeOpen &&
+        !base_data.notAllItemsOpen &&
+        !ship_data.tutUiOpen) {
         drawUi(-1);
         if (keys[1]) {
             player_data.x += 0.05;
@@ -790,12 +807,20 @@ function shipUpd() {
             player_data.y -= 0.05;
             player_data.c = -Math.PI/2;
         }
+    } else if (base_data.tutorialOpen) {
+        drawUi(172);
+    } else if (base_data.itemTakeOpen) {
+        drawUi(173);
+    } else if (base_data.notAllItemsOpen) {
+        drawUi(176);
+    } else if (ship_data.tutUiOpen) {
+        drawUi(174);
     } else {
-        var ship = data[161][data[161].length-1]; //todo: replace with literal
-        ship.x = 187-space_data.x/1.5;
-        ship.y = 255-space_data.y/1.5;
+        var shipd = data[171][data[171].length-1];
+        shipd.x = 187-space_data.x/1.5;
+        shipd.y = 255-space_data.y/1.5;
         canvas2dctx.globalAlpha = 1;
-        drawUi(161);
+        drawUi(171);
     }
 
     for (var n of loop(scene.length)) {
@@ -866,12 +891,17 @@ function shipUpd() {
                 var a = distanceFrom(space_data.x, space_data.y, -20, -140);
                 var b = distanceFrom(space_data.x, space_data.y, -110, 310);
                 var c = distanceFrom(space_data.x, space_data.y, -320, -110);
-                if (a < b && a < c) { //acid (known as snowstorm but changed back to acid)
+                var d = distanceFrom(space_data.x, space_data.y, -140, 70);
+                if (a < b && a < c && a < d) { //acid (known as snowstorm but changed back to acid)
                     loadBase(0);
-                } else if (b < a && b < c) { //lava
+                } else if (b < a && b < c && b < d) { //lava
                     loadBase(3);
-                } else if (c < a && c < b) { //water
+                } else if (c < a && c < b && c < d) { //water
                     loadBase(5);
+                } else if (d < a && d < b && d < c) { //station
+                    player_data.x = 0;
+                    player_data.y = -0.2;
+                    loadScene(8);
                 }
             }
             break;
@@ -886,16 +916,20 @@ function shipUpd() {
             if (keys[4] && eUp) {
                 eUp = false;
                 if (5 < player_data.x && player_data.x < 6.2 &&
-                    -0.7 < player_data.y && player_data.y < 0.7) {
+                    -0.7 < player_data.y && player_data.y < 0.7 &&
+                    !base_data.deactivatedcameras[0]) {
                     removeSceneObj(base_data.povs[1]);
                     deleteArrayItemIndex(base_data.povs, 1);
                     deleteArrayItemIndex(base_data.cams, 1);
                     player_data.lockx = -5;
                     player_data.locky = 5;
                     player_data.locktimer = 120;
+                    base_data.deactivatedcameras[0] = true;
                 }
                 if (-5.1 < player_data.x && player_data.x < -3.8 &&
-                    4 < player_data.y && player_data.y < 5.4) {
+                    4 < player_data.y && player_data.y < 5.4 &&
+                    base_data.deactivatedcameras[0] &&
+                    !base_data.deactivatedcameras[1]) {
                     removeSceneObj(base_data.povs[5]);
                     removeSceneObj(base_data.povs[6]);
                     deleteArrayItemIndex(base_data.povs, 5);
@@ -905,6 +939,7 @@ function shipUpd() {
                     player_data.lockx = -5;
                     player_data.locky = -5;
                     player_data.locktimer = 120;
+                    base_data.deactivatedcameras[1] = true;
                 }
             } else if (!keys[4] && !eUp) {
                 eUp = true;
@@ -919,19 +954,24 @@ function shipUpd() {
             if (keys[4] && eUp) {
                 eUp = false;
                 if (-2.8 < player_data.x && player_data.x < -1.7 &&
-                    -10.5 < player_data.y && player_data.y < -9.1) {
+                    -10.5 < player_data.y && player_data.y < -9.1 &&
+                    !base_data.deactivatedcameras[0]) {
                     removeSceneObj(base_data.povs[0]);
                     removeSceneObj(base_data.povs[1]);
                     removeSceneObj(base_data.povs[2]);
+                    removeSceneObj(base_data.povs[5]);
                     deleteArrayItemIndex(base_data.povs, 0);
                     deleteArrayItemIndex(base_data.cams, 0);
                     deleteArrayItemIndex(base_data.povs, 0);
                     deleteArrayItemIndex(base_data.cams, 0);
                     deleteArrayItemIndex(base_data.povs, 0);
                     deleteArrayItemIndex(base_data.cams, 0);
+                    deleteArrayItemIndex(base_data.povs, 2);
+                    deleteArrayItemIndex(base_data.cams, 2);
                     player_data.lockx = -5;
                     player_data.locky = -12.5;
                     player_data.locktimer = 120;
+                    base_data.deactivatedcameras[0] = true;
                 }
             } else if (!keys[4] && !eUp) {
                 eUp = true;
@@ -945,7 +985,7 @@ function shipUpd() {
                 player_data.y = 6.5;
                 cam.z = 7;
                 player_data.x = -7.5;
-                cam.x = -7.5
+                cam.x = -7.5;
                 loadBase(2, false);
             }
             break;
@@ -955,28 +995,26 @@ function shipUpd() {
                 if (-4.9 < player_data.x && player_data.x < -3.95 &&
                     2.3 < player_data.y && player_data.y < 3.05) {
                     removeSceneObj(base_data.specialitem);
+                    base_data.collecteditems[0] = 1;
+                    base_data.itemTakeOpen = true;
                 }
             } else if (!keys[4] && !eUp) {
                 eUp = true;
             }
-            if (player_data.x > 6 && player_data.y > -6) {
-                player_data.x = -5.5;
-                cam.x = -6;
-                loadBase(0, false);
-            }
-            if (player_data.x < -6.44 && player_data.y < -13.7) {
-                player_data.y = 6.5;
-                cam.z = 7;
-                player_data.x = -7.5;
-                cam.x = -7.5
-                loadBase(2, false);
+            if (player_data.y > 7) {
+                player_data.y = -13;
+                cam.z = -12.7;
+                player_data.x = -7.6;
+                cam.x = -7.6;
+                loadBase(1, false);
             }
             break;
         case 5:
             if (keys[4] && eUp) {
                 eUp = false;
                 if (2.3 < player_data.x && player_data.x < 3.5 &&
-                    -4.4 < player_data.y && player_data.y < -3.1) {
+                    -4.4 < player_data.y && player_data.y < -3.1 &&
+                    !base_data.deactivatedcameras[0]) {
                     removeSceneObj(base_data.povs[0]);
                     removeSceneObj(base_data.povs[1]);
                     removeSceneObj(base_data.povs[6]);
@@ -989,9 +1027,12 @@ function shipUpd() {
                     player_data.lockx = -3.5;
                     player_data.locky = 2;
                     player_data.locktimer = 120;
+                    base_data.deactivatedcameras[0] = true;
                 }
                 if (4.4 < player_data.x && player_data.x < 5.8 &&
-                    10.4 < player_data.y && player_data.y < 12) {
+                    10.4 < player_data.y && player_data.y < 12 &&
+                    base_data.deactivatedcameras[0] &&
+                    !base_data.deactivatedcameras[1]) {
                     removeSceneObj(base_data.povs[5]);
                     removeSceneObj(base_data.povs[6]);
                     removeSceneObj(base_data.povs[7]);
@@ -1004,15 +1045,16 @@ function shipUpd() {
                     player_data.lockx = -3.5;
                     player_data.locky = 10.5;
                     player_data.locktimer = 120;
+                    base_data.deactivatedcameras[1] = true;
                 }
             } else if (!keys[4] && !eUp) {
                 eUp = true;
             }
             if (player_data.x < -5.15 && player_data.y > 11.83) {
-                player_data.x -= 5; //hack for moving player back since this level wasn't designed to wrap
-                cam.x -= 5;
+                player_data.x -= 3.4; //hack for moving player back since this level wasn't designed to wrap
+                cam.x -= 3.4;
                 player_data.y = -5.4;
-                cam.y = -5.6;
+                cam.z = -5.6;
                 loadBase(4, false);
             }
             /*if (player_data.x < -6.44 && player_data.y < -13.7) {
@@ -1022,6 +1064,71 @@ function shipUpd() {
                 cam.x = -7.5
                 loadBase(2, false);
             }*/
+            break;
+        case 6:
+            if (keys[4] && eUp) {
+                eUp = false;
+                if (10.82 < player_data.x && player_data.x < 11.75 &&
+                    2.4 < player_data.y && player_data.y < 3.3) {
+                    removeSceneObj(base_data.specialitem);
+                    base_data.collecteditems[1] = 1;
+                    base_data.itemTakeOpen = true;
+                }
+                
+                if (-0.15 < player_data.x && player_data.x < 1.06 &&
+                    -0.6 < player_data.y && player_data.y < 1 &&
+                    !base_data.deactivatedcameras[0]) {
+                    removeSceneObj(base_data.povs[5]);
+                    deleteArrayItemIndex(base_data.povs, 5);
+                    deleteArrayItemIndex(base_data.cams, 5);
+                    player_data.lockx = 6.9;
+                    player_data.locky = 2.85;
+                    player_data.locktimer = 120;
+                    base_data.deactivatedcameras[0] = true;
+                }
+            } else if (!keys[4] && !eUp) {
+                eUp = true;
+            }
+            if (player_data.x < -8.65 && player_data.y < -5.4) {
+                player_data.x += 3.4;
+                cam.x += 3.4;
+                player_data.y = 11.8;
+                cam.z = 11.84;
+                loadBase(3, false);
+            }
+            break;
+        case 7:
+            if (keys[4] && eUp) {
+                eUp = false;
+                if (-5.6 < player_data.x && player_data.x < -4.65 &&
+                    12 < player_data.y && player_data.y < 12.9) {
+                    removeSceneObj(base_data.specialitem);
+                    base_data.collecteditems[2] = 1;
+                    base_data.itemTakeOpen = true;
+                }
+            } else if (!keys[4] && !eUp) {
+                eUp = true;
+            }
+            break;
+        case 8:
+            if (keys[4] && eUp) {
+                eUp = false;
+                if (-2.3 < player_data.x && player_data.x < -1.1 &&
+                    -2.3 < player_data.y && player_data.y < -1.1) {
+                    if (base_data.collecteditems[0] == 1 &&
+                        base_data.collecteditems[1] == 1 &&
+                        base_data.collecteditems[2] == 1) {
+                        planets(3);
+                    } else {
+                        base_data.notAllItemsOpen = true;
+                    }
+                }
+            } else if (!keys[4] && !eUp) {
+                eUp = true;
+            }
+            if (player_data.x > 1.25 && player_data.y > -0.6) {
+                ship(0);
+            }
             break;
     }
 
@@ -1049,9 +1156,9 @@ function shipUpd() {
         canvas2dctx.fillStyle = "#000";
         canvas2dctx.fillRect(0, 0, canvas2d.width, canvas2d.height);
         ship_data.fadein -= 0.004;
-        if (ship_data.fadein <= 0) {
+        //if (ship_data.fadein <= 0) {
             canvas2dctx.globalAlpha = 1;
-        }
+        //}
     } else {
         canvas2dctx.globalAlpha = 1;
         canvas2dctx.fillStyle = "#f00";
@@ -1059,10 +1166,32 @@ function shipUpd() {
     }
 }
 function shipClk() {
-    if (selectedUi !== undefined && ship_data.uiOpen) {
-        if (selectedUi.y == 420) {
+    if (selectedUi !== undefined && (ship_data.uiOpen ||
+                                     base_data.tutorialOpen ||
+                                     base_data.itemTakeOpen ||
+                                     base_data.notAllItemsOpen ||
+                                     ship_data.tutUiOpen)) {
+        if (selectedUi.y == 420) {          
             drawUi(-1);
             ship_data.uiOpen = false;
+            base_data.tutorialOpen = false;
+            base_data.notAllItemsOpen = false;
+            ship_data.tutUiOpen = false;
+
+            if (base_data.itemTakeOpen) {
+                base_data.itemTakeOpen = false;
+                switch (curScene) {
+                    case 4:
+                        planets(1);
+                        break;
+                    case 6:
+                        planets(0);
+                        break;
+                    case 7:
+                        planets(2);
+                        break;
+                }
+            }
         }
     }
 }
@@ -1112,13 +1241,20 @@ function loadBase(levelId, setLoc = true) {
     base_data.cams = [];
     base_data.povs = [];
     base_data.masks = [];
+    base_data.deactivatedcameras = [0,0];
     if (setLoc) {
-        player_data.x = [5, 5, -7.5, 7.5, -10.25, 9.6][levelId];
-        player_data.y = [5.5, -5.5, 6.5, -5.15, -5, -15.5][levelId];
+        player_data.x = [5,    5,  -7.5,  7.5,   -10.25, 9.6 ][levelId];
+        player_data.y = [5.5, -5.5, 6.5, -10.25, -5,    -15.5][levelId];
     }
+
+    if (base_data.firsttime) {
+        base_data.firsttime = false;
+        base_data.tutorialOpen = true;
+    }
+
     levelId += 2;
     loadScene(levelId);
-    for (var i of data[162+levelId]) {
+    for (var i of data[175+levelId]) {
         var r = i[2]*(Math.PI/2);
         var c = addSceneObj(tfm(i[0], 3.5, i[1], r), 18);
         base_data.povs.push(addSceneObj(tfm(i[0], 1.75, i[1], r), 20, 2));
@@ -1133,13 +1269,13 @@ function loadBase(levelId, setLoc = true) {
         makeGround(0);
     }
     if (levelId == 1+2) {
-        base_data.masks.push(addSceneObj(tfm(0.3, 2, -7.55, 0), 56, 1));
-        base_data.masks.push(addSceneObj(tfm(-5.7, 2, -7.55, 0), 56, 1));
-        base_data.masks.push(addSceneObj(tfm(-2.5, 2, -4.3, Math.PI/2), 56, 1));
-        base_data.masks.push(addSceneObj(tfm(1.5, 2, -6, Math.PI/2), 56, 1));
-        base_data.masks.push(addSceneObj(tfm(1.5, 2, -7, Math.PI/2), 56, 1));
-        base_data.masks.push(addSceneObj(tfm(1.5, 2, -8, Math.PI/2), 56, 1));
-        base_data.masks.push(addSceneObj(tfm(1.5, 2, -9, Math.PI/2), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(0.3, 1.7, -7.55, 0), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(-5.7, 1.7, -7.55, 0), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(-2.5, 1.7, -4.3, Math.PI/2), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(1.5, 1.7, -6, Math.PI/2), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(1.5, 1.7, -7, Math.PI/2), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(1.5, 1.7, -8, Math.PI/2), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(1.5, 1.7, -9, Math.PI/2), 56, 1));
     }
     if (levelId == 2+2) {
         base_data.specialitem = addSceneObj(tfm(-4.35,2.5,2.6), 113);
@@ -1166,9 +1302,19 @@ function loadBase(levelId, setLoc = true) {
         base_data.masks.push(addSceneObj(tfm(1.7, 1.7, -2.6, 0), 56, 1));
         base_data.masks.push(addSceneObj(tfm(2.9, 1.7, -3, 0), 56, 1));
         base_data.masks.push(addSceneObj(tfm(2.9, 1.7, -2.6, 0), 56, 1));
+
+        base_data.masks.push(addSceneObj(tfm(7.8, 1.7, 0.7, 0), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(7.8, 1.7, 0.4, 0), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(6.6, 1.7, 0.7, 0), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(6.6, 1.7, 0.4, 0), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(5.8, 1.7, 0.7, 0), 56, 1));
+        base_data.masks.push(addSceneObj(tfm(5.8, 1.7, 0.4, 0), 56, 1));
+
+        base_data.specialitem = addSceneObj(tfm(11.35,2.5,2.8), 114);
     }
     if (levelId == 5+2) {
         makeGround(2);
+        base_data.specialitem = addSceneObj(tfm(-5.1,2.5,12.95), 115);
     }
 }
 function updateCams() {
@@ -1197,6 +1343,10 @@ function updateCams() {
     }
     if (base_data.busted > 0)
         base_data.busted--;
+    if (base_data.busted > 200) {
+        base_data.busted = 0;
+        loadBase(curScene-2);
+    }
 }
 //https://math.stackexchange.com/questions/1805724/detect-if-point-is-within-rotated-rectangles-bounds
 function checkIfInArea(x, y, x0, y0, xw, yw, xh, yh) {
@@ -1218,7 +1368,7 @@ function checkIfInArea(x, y, x0, y0, xw, yw, xh, yh) {
     if (u < 0 || u > L)
         return false;
     else {
-        v = (x - x0) * yu + (y - y0) * xu;
+        var v = (x - x0) * yu + (y - y0) * xu;
         if (v < 0 || v > L)
             return false;
         else
@@ -1242,7 +1392,7 @@ function makeGround(type) {
         for (var j in loop(8)) {
             var arrayItem = addSceneObj(tfm((i-4)*6.4, 0, (j-4)*6.4), [99,39,106][type]);
             scene.splice(scene.length-1, 1);
-            scene.unshift(arrayItem);
+            scene.unshift(arrayItem); //hack for glass
         }
     }
 }
@@ -1318,11 +1468,12 @@ function spaceUpd() {
     if (distanceToClosestPlanet < 5) {
         space_data.fv *= (-1.1 - ((5-distanceToClosestPlanet)*0.3));
     }
-    if (distanceFrom(space_data.x, space_data.y, -140, 70) < 3) {
-        space_data.fv *= (-1.1 - ((3-distanceToClosestPlanet)*0.3));
+    var distanceToSpaceStation = distanceFrom(space_data.x, space_data.y, -140, 70);
+    if (distanceToSpaceStation < 1) {
+        space_data.fv *= (-1.1 - ((3-distanceToSpaceStation)*0.3));
     }
     
-    if (distanceFrom(space_data.x, space_data.y, -140, 70) < 7 ||
+    if (distanceToSpaceStation < 7 ||
         distanceToClosestPlanet < 12) {
         if (space_data.firstdock) {
             space_data.firstdock = false;
@@ -1335,7 +1486,7 @@ function spaceUpd() {
 
     drawUi(-1);
     if (space_data.tutorialOpen) {
-        drawUi(162);
+        drawUi(175);
     }
 
     space_data.starcheck--;
@@ -1459,31 +1610,38 @@ var planets_data = {
     y: 10,
     curmdl: 0,
     shootTimer: 0,
-    lavaTimer: 0,
+    groundTimer: 0,
     bubbleTimer: 0,
     planet: -1,
     event: 0,
+    score: 0,
+    totalscore: 0,
 };
 function planets(planet) {
     scene = [];
     curLoop = planetsUpd;
-    //curClick = planetsShoot;
-
-    //lockMouse = true;
     
     loadScene(-1);
     drawUi(-1);
 
-    var ground = ([39,46,52][planet]);
-    for (var i of loop(36)) {
-        planets_data.ground.push(
-            addSceneObj(tfm((~~(i/6)-2.5)*6, 0, ((i%6)+2)*6), ground)
-        );
-    }
-
     planets_data.curmdl = addSceneObj(tfm(0, 1, 10), 19);
     planets_data.planet = planet;
+    planets_data.nextSpawnTime = 160;
+    planets_data.ships = [];
+    planets_data.bullets = [];
+    planets_data.enemybullets = [];
+    planets_data.shootTimer = 0;
+    planets_data.groundTimer = 0;
+    planets_data.bubbleTimer = 0;
+    planets_data.event = 0;
+    planets_data.score = 0;
 
+    var ground = ([39,99,106,120][planet]);
+    for (var i of loop(36)) {
+        planets_data.ground.push(
+            addSceneObj(tfm((~~(i/6)-2.5)*6.4, 0, ((i%6)+2)*6.4), ground)
+        );
+    }
     ship_data.fadein = 1;
     seed = 0.12495 + (planet*0.001);
     cam.x = 0;
@@ -1491,6 +1649,9 @@ function planets(planet) {
     cam.z = 5;
     cam.a = -1.3;
 }
+//global variables because last day
+var floorType = [39,99,106,120];
+var enemyType = [27,26,28,27];
 function planetsUpd() {
     var speed = (keys[6])?0.08:0.12;
     if (keys[1]) {
@@ -1519,7 +1680,8 @@ function planetsUpd() {
 
     planets_data.nextSpawnTime--;
     planets_data.shootTimer--;
-    planets_data.lavaTimer--;
+    if (planets_data.planet != 3)
+        planets_data.groundTimer--;
     planets_data.bubbleTimer--;
     if (planets_data.nextSpawnTime < 1) {
         function spawnEnemy(x, y, xd, yd, mode, count, mdl) {
@@ -1528,7 +1690,7 @@ function planetsUpd() {
             //        tfm(randRange(-6, 6), 1, cam.z+20),
             //    ~~randRange(26,28))
             //);
-            count = (count==0)?~~randRange(4,6):count;
+            count = (count==0)?(mode==1)?1:~~randRange(4,6):count;
             for (var i in loop(count)) {
                 var xoff, yoff;
                 if (mode != 2) {
@@ -1546,41 +1708,88 @@ function planetsUpd() {
                 obj.afm = 0;
                 planets_data.ships.push(obj);
             }
-            //console.log("spawning at " + obj.xd2 + " " + obj.yd2 + " => " + obj.xd + " " + obj.yd + " " + (["corner","train","super","boss"][mode]));
         }
-        var leveldata = leveld[0][planets_data.event];
+        var leveldata = leveld[planets_data.planet][planets_data.event];
         switch (leveldata[0]) {
             case 0: //corner
-                spawnEnemy(leveldata[1]<4?-1:9, 9, leveldata[1], leveldata[2], 0, leveldata[3], 27);
+                spawnEnemy(leveldata[1]<4?-1:9, 9, leveldata[1], leveldata[2], 0, leveldata[3], enemyType[planets_data.planet]);
                 break;
             case 2: //train
-                spawnEnemy(leveldata[1]==0?-1:9, leveldata[2], leveldata[1]==0?9:-1, leveldata[2], 2, leveldata[3], 27);
+                spawnEnemy(leveldata[1]==0?-1:9, leveldata[2], leveldata[1]==0?9:-1, leveldata[2], 2, leveldata[3], enemyType[planets_data.planet]);
                 break;
-            case 1: //super
-                spawnEnemy(leveldata[1], 9, leveldata[1], leveldata[2], 1, leveldata[3], 27);
+            case 1: //single
+                spawnEnemy(leveldata[1], 9, leveldata[1], leveldata[2], 1, 1, enemyType[planets_data.planet]);
                 break;
             case 3: //boss
-
+                var bossObj = addSceneObj(tfm(0, 3.2, 20), 116);
+                bossObj.afm = 0;
+                bossObj.hth = 100;
+                planets_data.ships.push(bossObj);
+                planets_data.ships.push(addSceneObj(tfm(0, 2.8, 20), 118));
+                planets_data.ships.push(addSceneObj(tfm(0, 2.4, 20), 119));
+                planets_data.ships.push(addSceneObj(tfm(0, 2, 20), 117));
                 break;
         }
-        planets_data.nextSpawnTime = leveldata[4]*60;
+        planets_data.nextSpawnTime = planets_data.nextSpawnTime==9?99999999:leveldata[4]*60;
         planets_data.event++;
-        if (planets_data.event > leveld[0].length-1) {
+        if (planets_data.event > leveld[planets_data.planet].length-1) {
             planets_data.nextSpawnTime = 99999999;
+            if (planets_data.planet != 3) {
+                setTimeout(function() {
+                    ship(0);
+                    player_data.x = 0;
+                    player_data.y = 0;
+                    planets_data.totalscore += planets_data.score;
+                }, 10000);
+            }
         }
     }
-    if (planets_data.lavaTimer < 1) {
+    if (planets_data.groundTimer < 1 && planets_data.planet != 3) {
         planets_data.ground.push(
             addSceneObj(
                 tfm(~~randRange(-9, 9), 0, ~~randRange(10, 26)),
-            [40,47,53][planets_data.planet])
+            floorType[planets_data.planet]+1)
         );
-        planets_data.lavaTimer = randRange(15, 35);
+        planets_data.groundTimer = randRange(15, 35);
     }
     for (var i of planets_data.ships) {
+        i.afm += 0.01;
+
+        if (i.mdl == 116) {
+            if (i.afm%0.08<0.01) {
+                planets_data.enemybullets.push(
+                    addSceneObj(
+                        tfm(i.tfm.x, 1, i.tfm.z, i.tfm.c+((i.afm%0.64)/0.16*Math.PI/2)),
+                    17)
+                );
+                planets_data.enemybullets.push(
+                    addSceneObj(
+                        tfm(i.tfm.x, 1, i.tfm.z, i.tfm.c+Math.PI/2+((i.afm%0.64)/0.16*Math.PI/2)),
+                    17)
+                );
+            }
+            for (var j of planets_data.bullets) {
+                if ((Math.sqrt(Math.abs(i.tfm.x-j.tfm.x)**2) + (Math.abs(i.tfm.z-j.tfm.z)**2)) < 1) {
+                    removeSceneObj(j);
+                    planets_data.bullets.splice(planets_data.bullets.indexOf(j), 1);
+                    i.hth--;
+                    planets_data.score += 10;
+                }
+                if (i.hth < 0) {
+                    ship(0);
+                    player_data.x = 0;
+                    player_data.y = 0;
+                    planets_data.totalscore += planets_data.score;
+                }
+            }
+        }
+
+        if (i.mdl > 115) {
+            i.tfm.z += (12-i.tfm.z) * 0.05;
+            continue;
+        }
         //i.tfm.z -= 0.05;
         i.tfm.c += 0.03;
-        i.afm += 0.01;
         //if (i.tfm.z < cam.z-5) {
         if (i.afm > Math.PI*2) {
             removeSceneObj(i);
@@ -1604,6 +1813,7 @@ function planetsUpd() {
                 removeSceneObj(j);
                 planets_data.ships.splice(planets_data.ships.indexOf(i), 1);
                 planets_data.bullets.splice(planets_data.bullets.indexOf(j), 1);
+                planets_data.score += 200;
             }
         }
     }
@@ -1624,20 +1834,30 @@ function planetsUpd() {
             removeSceneObj(i);
             planets_data.enemybullets.splice(planets_data.enemybullets.indexOf(i), 1);
         }
+        if ((Math.sqrt(Math.abs(i.tfm.x-planets_data.x)**2) + (Math.abs(i.tfm.z-planets_data.y)**2)) < 0.2) {
+            removeSceneObj(i);
+            planets_data.enemybullets.splice(planets_data.enemybullets.indexOf(i), 1);
+            planets_data.score -= 50;
+        }
     }
+
+    drawUi(-1);
+    canvas2dctx.fillStyle = "#fff";
+    canvas2dctx.fillText("score: " + planets_data.score, 20, 20);
+
     for (var i of planets_data.ground) {
         i.tfm.z -= 0.2;
-        var isGround = [39,46,52].includes(i.mdl);
+        var isGround = floorType.includes(i.mdl);
         if (i.tfm.z < cam.z-10) {
             if (isGround) {
-                i.tfm.z += 30;
+                i.tfm.z += 32;
             } else {
                 removeSceneObj(i);
                 planets_data.ground.splice(planets_data.ground.indexOf(i), 1);
             }
         }
         if (!isGround && planets_data.bubbleTimer < 1) {
-            if ([45].includes(i.mdl)) {
+            if (floorType.includes(i.mdl-6)) {
                 removeSceneObj(i);
                 planets_data.ground.splice(planets_data.ground.indexOf(i), 1);
             } else {
