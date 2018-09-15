@@ -44,7 +44,7 @@ Once that was done, it was time to load the model in.  It didn&#39;t take too lo
 
 The spinning cube was great, but there was no camera.  The code I was using let me move objects around, but I couldn&#39;t look around.  It just wasn&#39;t a thing.  It was probably the end of March when I stopped development on building the engine.  A very crude prototype of voxelbox was created in Java that supported 8x8x8 models.  Color wasn&#39;t even supported until it was rewritten in C#.  It probably took two weeks for this to be finished as I had a lot of other things going on at this time and I kept messing up in the stupidest ways possible.
 
-The idea changed sometime around the end of May with an investigative horror game where you investigate a murder in a locked down hotel building (this was not inspired by observer, I only got that game later on from the Twitch Prime thing.)  Some of my friends thought it would be a cool idea to make so I started building those levels in MagicaVoxel:
+In April, the idea was breaking out of a prison. This is where the idea of using MagicaVoxel for designing the levels started.  The idea changed sometime around the end of May with an investigative horror game where you investigate a murder in a locked down hotel building.  I started designing a few of those levels in MagicaVoxel:
 
 ![second map](https://user-images.githubusercontent.com/12544505/45582243-04bbd000-b872-11e8-86c7-bc93f13b50a2.png)
 
